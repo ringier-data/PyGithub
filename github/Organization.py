@@ -1154,6 +1154,50 @@ class Organization(github.GithubObject.CompletableGithubObject):
             headers={"Accept": Consts.mediaTypeMigrationPreview},
         )
 
+    def get_public_key(self):
+        """
+        :calls: `GET /orgs/{org}/actions/secrets/public-key <https://docs.github.com/en/rest/reference/actions#get-an-organization-public-key>`_
+        :rtype: :class:`github.PublicKey.PublicKey`
+        """
+        headers, data = self._requester.requestJsonAndCheck(
+            "GET", f"{self.url}/actions/secrets/public-key"
+        )
+        return github.PublicKey.PublicKey(
+            self._requester, headers, data, completed=True
+        )
+
+    def create_secret(self, secret_name, unencrypted_value, visibility, selected_repository_ids=github.GithubObject.NotSet):
+        """
+        :calls: `PUT /orgs/{org}/actions/secrets/{secret_name} <https://docs.github.com/en/rest/reference/actions#get-an-organization-secret>`_
+        :param secret_name: string
+        :param unencrypted_value: string
+        :param visibility: str
+        :param selected_repository_ids: list of str
+        :rtype: bool
+        """
+        assert isinstance(secret_name, str), secret_name
+        assert isinstance(unencrypted_value, str), unencrypted_value
+        assert isinstance(visibility, str), visibility
+        if visibility == "selected":
+            assert isinstance(selected_repository_ids, list), selected_repository_ids
+        else:
+            assert isinstance(selected_repository_ids, github.GithubObject.NotSet), selected_repository_ids
+
+        public_key = self.get_public_key()
+        payload = public_key.encrypt(unencrypted_value)
+        put_parameters = {
+            "key_id": public_key.key_id,
+            "encrypted_value": payload,
+            "visibility": visibility,
+        }
+        if selected_repository_ids is not github.GithubObject.NotSet:
+            put_parameters["selected_repository_ids"] = selected_repository_ids
+
+        status, headers, data = self._requester.requestJson(
+            "PUT", self.url + "/actions/secrets/" + secret_name, input=put_parameters
+        )
+        return status == 201
+
     def get_installations(self):
         """
         :calls: `GET /orgs/{org}/installations <https://docs.github.com/en/rest/reference/orgs#list-app-installations-for-an-organization>`_
